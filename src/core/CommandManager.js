@@ -81,6 +81,24 @@ export class CommandManager {
     }
 
     /**
+     * Add a command to history without executing it
+     * Useful when the action was already performed visually (e.g., resize drag)
+     * @param {Command} command - Command to add to history
+     */
+    addToHistory(command) {
+        this.undoStack.push(command);
+        this.redoStack = []; // Clear redo stack
+
+        // Limit history size
+        if (this.undoStack.length > this.maxHistory) {
+            this.undoStack.shift();
+        }
+
+        this.eventBus.emit(Events.HISTORY_CHANGED, this.getState());
+        this.eventBus.emit(Events.DIAGRAM_MODIFIED, {});
+    }
+
+    /**
      * Undo the last command
      * @returns {boolean} Success
      */

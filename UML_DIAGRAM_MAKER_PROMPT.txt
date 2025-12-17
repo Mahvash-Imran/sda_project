@@ -1,0 +1,1006 @@
+===================================================================================
+COMPREHENSIVE PROMPT FOR BUILDING A FULLY FUNCTIONAL UML DIAGRAM MAKER
+===================================================================================
+
+PROJECT OVERVIEW:
+Build a web-based UML diagram maker called "UMLify" using vanilla JavaScript, HTML5, and CSS3. The application must support 8 types of UML diagrams with full functionality for creating, editing, connecting, resizing, and managing diagram elements.
+
+===================================================================================
+SUPPORTED DIAGRAM TYPES:
+===================================================================================
+
+1. SEQUENCE DIAGRAM
+2. CLASS DIAGRAM
+3. USE CASE DIAGRAM
+4. STATE DIAGRAM
+5. ACTIVITY DIAGRAM
+6. ERD (Entity Relationship Diagram)
+7. COMPONENT DIAGRAM
+8. PACKAGE DIAGRAM
+
+===================================================================================
+CORE REQUIREMENTS:
+===================================================================================
+
+ARCHITECTURE:
+-------------
+- Plugin-based architecture where each diagram type is a separate plugin
+- Event-driven system using Event Bus pattern for loose coupling
+- Command pattern for undo/redo functionality
+- MVC/MVVM pattern for clean separation of concerns
+- SVG-based rendering for crisp graphics at any zoom level
+
+MAIN COMPONENTS:
+----------------
+1. SVGCanvas: Main drawing area with pan and zoom capabilities
+2. Toolbar: Tools for selection, shapes, and connections
+3. DiagramSelector: Switch between diagram types
+4. PropertiesPanel: Edit selected element properties
+5. ShapeFactory: Create shapes based on diagram type
+6. ConnectionManager: Handle all connection logic
+7. ResizeHandleManager: Handle shape resizing
+8. SelectionManager: Manage multi-selection and bulk operations
+9. CommandManager: Undo/redo stack management
+10. InteractionController: Handle mouse/touch events
+
+===================================================================================
+CRITICAL FEATURES - RESIZING SYSTEM:
+===================================================================================
+
+RESIZE HANDLES:
+---------------
+- Display 8 resize handles on selected shapes (N, NE, E, SE, S, SW, W, NW)
+- Handles should be small squares (8x8px) positioned at edges and corners
+- Handle visibility: Show only on single selection, hide on multi-selection
+- Color: Blue fill with white border for visibility
+- Cursor feedback: Change cursor based on handle direction (nwse-resize, nesw-resize, ew-resize, ns-resize)
+
+RESIZE BEHAVIOR:
+----------------
+1. Corner Handles (NE, SE, SW, NW):
+   - Resize both width and height proportionally or freely
+   - Maintain minimum size (e.g., 50x30px)
+   - Update shape's x, y, width, height attributes
+
+2. Edge Handles (N, E, S, W):
+   - North: Adjust height and y position
+   - South: Adjust height only
+   - East: Adjust width only
+   - West: Adjust width and x position
+
+3. Constraints:
+   - Enforce minimum dimensions for each shape type
+   - Prevent negative dimensions
+   - Keep text centered or properly positioned during resize
+   - Update internal compartments proportionally (for Class diagrams)
+
+4. Connection Updates:
+   - CRITICAL: When resizing a shape, all connected lines MUST update in real-time
+   - Recalculate connection anchor points based on new shape boundaries
+   - Maintain connection angles and routing
+   - Use connection observer pattern to notify all connected lines
+
+RESIZE IMPLEMENTATION DETAILS:
+-------------------------------
+```javascript
+// Pseudo-code for resize logic
+class ResizeHandleManager {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.activeHandle = null;
+    this.resizeStartPos = null;
+    this.originalBounds = null;
+  }
+
+  startResize(handle, shape, event) {
+    this.activeHandle = handle; // 'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'
+    this.resizeStartPos = { x: event.clientX, y: event.clientY };
+    this.originalBounds = {
+      x: shape.x,
+      y: shape.y,
+      width: shape.width,
+      height: shape.height
+    };
+  }
+
+  resize(shape, event) {
+    const dx = event.clientX - this.resizeStartPos.x;
+    const dy = event.clientY - this.resizeStartPos.y;
+    
+    let newBounds = { ...this.originalBounds };
+
+    switch(this.activeHandle) {
+      case 'se': // Southeast: resize width and height
+        newBounds.width = Math.max(50, this.originalBounds.width + dx);
+        newBounds.height = Math.max(30, this.originalBounds.height + dy);
+        break;
+      case 'nw': // Northwest: adjust x, y, width, height
+        newBounds.x = this.originalBounds.x + dx;
+        newBounds.y = this.originalBounds.y + dy;
+        newBounds.width = Math.max(50, this.originalBounds.width - dx);
+        newBounds.height = Math.max(30, this.originalBounds.height - dy);
+        break;
+      // ... implement all 8 directions
+    }
+
+    // Update shape
+    shape.updateBounds(newBounds);
+    
+    // CRITICAL: Update all connections
+    this.updateConnections(shape);
+  }
+
+  updateConnections(shape) {
+    // Find all connections attached to this shape
+    const connections = this.canvas.getConnectionsForShape(shape.id);
+    connections.forEach(conn => {
+      conn.updatePath(); // Recalculate the connection path
+    });
+  }
+}
+```
+
+===================================================================================
+CRITICAL FEATURES - CONNECTION SYSTEM:
+===================================================================================
+
+CONNECTION TYPES & ARROWS:
+---------------------------
+
+1. ASSOCIATION (Class, Component, Package)
+   - Line style: Solid line
+   - Arrow: Simple line or open arrow at target end
+   - Bidirectional: Optional arrows on both ends
+   - Label: Can add multiplicity (1, *, 0..1, 1..*)
+
+2. AGGREGATION (Class, Component)
+   - Line style: Solid line
+   - Arrow: Hollow diamond at source end, open arrow at target
+   - Meaning: "Has-a" relationship (weak ownership)
+
+3. COMPOSITION (Class, Component)
+   - Line style: Solid line
+   - Arrow: Filled diamond at source end, open arrow at target
+   - Meaning: "Contains-a" relationship (strong ownership)
+
+4. INHERITANCE/GENERALIZATION (Class, Use Case)
+   - Line style: Solid line
+   - Arrow: Hollow triangle at parent end
+   - Meaning: "Is-a" relationship
+
+5. REALIZATION/IMPLEMENTATION (Class, Component)
+   - Line style: Dashed line
+   - Arrow: Hollow triangle at interface end
+   - Meaning: Interface implementation
+
+6. DEPENDENCY (Class, Component, Package)
+   - Line style: Dashed line
+   - Arrow: Open arrow at target
+   - Meaning: One element depends on another
+
+7. SEQUENCE MESSAGES (Sequence Diagram)
+   - Synchronous: Solid line with filled arrow
+   - Asynchronous: Solid line with open arrow
+   - Return: Dashed line with open arrow
+   - Create: Dashed line with open arrow (to new lifeline)
+   - Destroy: Solid line with filled arrow (to X symbol)
+
+8. STATE TRANSITIONS (State Diagram)
+   - Line style: Solid line with open arrow
+   - Label: Event/Guard/Action format
+   - Self-transition: Curved line back to same state
+
+9. ACTIVITY FLOW (Activity Diagram)
+   - Control Flow: Solid line with filled arrow
+   - Object Flow: Dashed line with open arrow
+
+10. ERD RELATIONSHIPS (ERD)
+    - One-to-One: 1 --- 1
+    - One-to-Many: 1 --- ∞
+    - Many-to-Many: ∞ --- ∞
+    - Line with crow's foot notation
+
+11. USE CASE RELATIONSHIPS (Use Case)
+    - Include: Dashed arrow with <<include>> stereotype
+    - Extend: Dashed arrow with <<extend>> stereotype
+    - Association: Solid line between actor and use case
+
+CONNECTION MECHANICS:
+---------------------
+
+1. INITIATION:
+   - Click connection tool in toolbar
+   - Click source shape (highlight valid connection points)
+   - Drag to target shape (show live preview line)
+   - Click target shape to complete connection
+   - OR: Select connector from toolbar, then click-drag-release
+
+2. CONNECTION POINTS/ANCHORS:
+   - Each shape should have multiple anchor points (center of each edge, corners)
+   - Auto-select nearest anchor point when connecting
+   - Allow manual anchor adjustment after creation
+   - Visual feedback: Show small circles at anchor points on hover
+
+3. PATH ROUTING:
+   - Direct: Straight line from source to target
+   - Orthogonal: 90-degree angles, useful for flowcharts
+   - Bezier: Smooth curves for organic appearance
+   - Manhattan: Grid-aligned routing avoiding overlaps
+   - Auto-routing: Intelligently avoid crossing shapes
+
+4. CONNECTION UPDATES (CRITICAL):
+   ```javascript
+   class Connection {
+     constructor(source, target, type) {
+       this.id = generateId();
+       this.source = source; // { shapeId, anchorPoint }
+       this.target = target; // { shapeId, anchorPoint }
+       this.type = type; // 'association', 'composition', etc.
+       this.path = null; // SVG path element
+       this.arrow = null; // Arrow marker
+       this.label = '';
+       
+       // Listen to shape changes
+       this.source.shape.on('move', () => this.updatePath());
+       this.source.shape.on('resize', () => this.updatePath());
+       this.target.shape.on('move', () => this.updatePath());
+       this.target.shape.on('resize', () => this.updatePath());
+     }
+
+     updatePath() {
+       // Get current positions of source and target shapes
+       const sourcePos = this.getAnchorPosition(this.source);
+       const targetPos = this.getAnchorPosition(this.target);
+       
+       // Calculate path based on routing algorithm
+       const pathData = this.calculatePath(sourcePos, targetPos);
+       
+       // Update SVG path
+       this.path.setAttribute('d', pathData);
+       
+       // Update arrow position and rotation
+       this.updateArrow(sourcePos, targetPos);
+     }
+
+     getAnchorPosition(anchor) {
+       const shape = this.canvas.getShape(anchor.shapeId);
+       // Calculate anchor point based on shape bounds and anchor type
+       switch(anchor.anchorPoint) {
+         case 'top':
+           return { x: shape.x + shape.width/2, y: shape.y };
+         case 'bottom':
+           return { x: shape.x + shape.width/2, y: shape.y + shape.height };
+         case 'left':
+           return { x: shape.x, y: shape.y + shape.height/2 };
+         case 'right':
+           return { x: shape.x + shape.width, y: shape.y + shape.height/2 };
+         // ... more anchor points
+       }
+     }
+
+     calculatePath(start, end) {
+       // Implement routing algorithm
+       if (this.routingStyle === 'direct') {
+         return `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
+       } else if (this.routingStyle === 'orthogonal') {
+         // Calculate orthogonal path with right angles
+         const midX = (start.x + end.x) / 2;
+         return `M ${start.x} ${start.y} L ${midX} ${start.y} L ${midX} ${end.y} L ${end.x} ${end.y}`;
+       }
+     }
+
+     updateArrow(start, end) {
+       // Calculate angle for arrow rotation
+       const angle = Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI;
+       
+       // Position arrow at target end
+       this.arrow.setAttribute('transform', 
+         `translate(${end.x}, ${end.y}) rotate(${angle})`);
+     }
+   }
+   ```
+
+5. ARROW MARKERS (SVG):
+   ```xml
+   <!-- Define arrow markers in SVG defs -->
+   <defs>
+     <!-- Open arrow -->
+     <marker id="arrow-open" markerWidth="10" markerHeight="10" 
+             refX="5" refY="3" orient="auto">
+       <path d="M0,0 L0,6 L9,3 z" fill="none" stroke="black"/>
+     </marker>
+     
+     <!-- Filled arrow -->
+     <marker id="arrow-filled" markerWidth="10" markerHeight="10" 
+             refX="5" refY="3" orient="auto">
+       <path d="M0,0 L0,6 L9,3 z" fill="black"/>
+     </marker>
+     
+     <!-- Hollow triangle (inheritance) -->
+     <marker id="arrow-inherit" markerWidth="12" markerHeight="12" 
+             refX="6" refY="6" orient="auto">
+       <path d="M0,6 L12,0 L12,12 z" fill="white" stroke="black"/>
+     </marker>
+     
+     <!-- Diamond (aggregation - hollow) -->
+     <marker id="diamond-hollow" markerWidth="12" markerHeight="12" 
+             refX="6" refY="6" orient="auto">
+       <path d="M0,6 L6,0 L12,6 L6,12 z" fill="white" stroke="black"/>
+     </marker>
+     
+     <!-- Diamond (composition - filled) -->
+     <marker id="diamond-filled" markerWidth="12" markerHeight="12" 
+             refX="6" refY="6" orient="auto">
+       <path d="M0,6 L6,0 L12,6 L6,12 z" fill="black"/>
+     </marker>
+   </defs>
+   ```
+
+6. CONNECTION INTERACTION:
+   - Hovering: Highlight connection line
+   - Selection: Click to select, show control points
+   - Editing: Double-click to add/edit label
+   - Deletion: Select and press Delete key
+   - Reconnection: Drag endpoint to different shape
+   - Control points: Drag to adjust curve/path
+
+===================================================================================
+DIAGRAM-SPECIFIC IMPLEMENTATIONS:
+===================================================================================
+
+1. SEQUENCE DIAGRAM:
+--------------------
+Shapes:
+  - Actor (stick figure)
+  - Object/Participant (rectangle with label)
+  - Lifeline (vertical dashed line below participant)
+  - Activation box (narrow rectangle on lifeline)
+  - Note (folded corner rectangle)
+  - Combined fragment (rectangle with operator: alt, opt, loop, par)
+
+Connections:
+  - Synchronous message (solid line with filled arrow)
+  - Asynchronous message (solid line with open arrow)
+  - Return message (dashed line with open arrow)
+  - Self-call (arrow looping back to same lifeline)
+
+Special Features:
+  - Auto-arrange lifelines horizontally
+  - Messages flow top to bottom (chronological order)
+  - Activation boxes start/end with messages
+  - Support for message numbering (1, 1.1, 1.2, 2, etc.)
+  - Combined fragments can contain nested messages
+
+2. CLASS DIAGRAM:
+-----------------
+Shapes:
+  - Class (rectangle with 3 compartments):
+    * Top: Class name (bold, centered)
+    * Middle: Attributes (- private, + public, # protected)
+    * Bottom: Methods (same visibility notation)
+  - Interface (rectangle with <<interface>> stereotype)
+  - Abstract class (class name in italics)
+  - Enumeration (<<enumeration>> stereotype)
+  - Note (folded corner)
+
+Connections:
+  - Association (solid line, optional arrows, multiplicity labels)
+  - Aggregation (hollow diamond at container end)
+  - Composition (filled diamond at container end)
+  - Inheritance/Generalization (hollow triangle at parent)
+  - Realization (dashed line with hollow triangle)
+  - Dependency (dashed arrow)
+
+Special Features:
+  - Editable compartments (add/remove/edit attributes and methods)
+  - Visibility indicators (+, -, #, ~)
+  - Static members (underlined)
+  - Abstract members (italics)
+  - Multiplicity labels on associations (0..1, 1, *, 1..*, etc.)
+  - Role names on association ends
+
+3. USE CASE DIAGRAM:
+--------------------
+Shapes:
+  - Actor (stick figure with label below)
+  - Use Case (oval/ellipse with centered text)
+  - System Boundary (rectangle containing use cases)
+  - Note (folded corner)
+
+Connections:
+  - Association (solid line between actor and use case)
+  - Include (dashed arrow with <<include>> stereotype)
+  - Extend (dashed arrow with <<extend>> stereotype)
+  - Generalization (hollow triangle, for actor or use case inheritance)
+
+Special Features:
+  - Actors can be on left or right of system boundary
+  - Use cases inside system boundary
+  - Support for extension points in use cases
+  - Actor generalization (specialized actors)
+
+4. STATE DIAGRAM:
+-----------------
+Shapes:
+  - State (rounded rectangle with state name)
+  - Initial state (filled circle)
+  - Final state (filled circle with outer ring)
+  - Choice pseudo-state (diamond)
+  - Fork/Join (thick horizontal or vertical bar)
+  - Composite state (state containing other states)
+
+Connections:
+  - Transition (solid arrow with label: event[guard]/action)
+  - Self-transition (curved arrow back to same state)
+
+Special Features:
+  - Support for entry/exit/do activities in states
+  - Guard conditions in square brackets [condition]
+  - Actions after forward slash /action
+  - Hierarchical states (states within states)
+  - History states (shallow and deep)
+
+5. ACTIVITY DIAGRAM:
+--------------------
+Shapes:
+  - Action (rounded rectangle)
+  - Initial node (filled circle)
+  - Final node (filled circle with outer ring)
+  - Decision node (diamond)
+  - Merge node (diamond)
+  - Fork node (thick horizontal or vertical bar)
+  - Join node (thick horizontal or vertical bar)
+  - Swimlane/Partition (vertical or horizontal lanes)
+  - Object node (rectangle for objects)
+  - Note
+
+Connections:
+  - Control flow (solid arrow)
+  - Object flow (dashed arrow)
+
+Special Features:
+  - Swimlanes to organize actions by actor/system
+  - Guard conditions on decision branches [condition]
+  - Parallel execution with fork/join
+  - Object pins on actions
+  - Interruptible activity regions
+
+6. ERD (Entity Relationship Diagram):
+--------------------------------------
+Shapes:
+  - Entity (rectangle with entity name)
+  - Attribute (oval connected to entity)
+  - Key attribute (underlined oval)
+  - Multi-valued attribute (double oval)
+  - Derived attribute (dashed oval)
+  - Weak entity (double rectangle)
+  - Relationship (diamond)
+  - Weak relationship (double diamond)
+
+Connections:
+  - Entity to attribute (simple line)
+  - Entity to relationship (line with cardinality notation)
+  - Cardinality markers: 1, N, M, 0..1, 1..N
+  - Crow's foot notation: one (|), many (crow's foot), zero (o)
+
+Special Features:
+  - Support for composite attributes
+  - Multi-valued attributes (double border)
+  - Identifying relationships for weak entities
+  - Ternary relationships (relationship diamond connecting 3+ entities)
+
+7. COMPONENT DIAGRAM:
+---------------------
+Shapes:
+  - Component (rectangle with <<component>> stereotype and component icon)
+  - Interface (circle or lollipop notation)
+  - Required interface (socket/half-circle notation)
+  - Port (small square on component edge)
+  - Package/Subsystem (tabbed rectangle)
+  - Node (3D box representing hardware)
+
+Connections:
+  - Dependency (dashed arrow)
+  - Assembly connector (lollipop to socket)
+  - Delegation connector (from port to internal component)
+  - Realization (dashed line with hollow triangle)
+
+Special Features:
+  - Lollipop notation for provided interfaces
+  - Socket notation for required interfaces
+  - Ports for component interaction points
+  - Nested components within packages
+
+8. PACKAGE DIAGRAM:
+-------------------
+Shapes:
+  - Package (rectangle with small tab on top left)
+  - Model element (any UML element inside package)
+  - Note
+
+Connections:
+  - Dependency (dashed arrow)
+  - Import (dashed arrow with <<import>> stereotype)
+  - Merge (dashed arrow with <<merge>> stereotype)
+  - Access (dashed arrow with <<access>> stereotype)
+
+Special Features:
+  - Nested packages
+  - Package merge and import relationships
+  - Visibility notation (+, -)
+  - Namespaces representation
+
+===================================================================================
+INTERACTION REQUIREMENTS:
+===================================================================================
+
+CANVAS INTERACTIONS:
+--------------------
+1. Pan: Click and drag empty canvas space (with hand tool or middle mouse)
+2. Zoom: Mouse wheel or pinch gesture (zoom to cursor position)
+3. Fit to screen: Button to fit all elements in view
+4. Grid: Optional snap-to-grid (configurable spacing)
+5. Rulers: Optional rulers showing coordinates
+
+SHAPE INTERACTIONS:
+-------------------
+1. Selection:
+   - Single click to select
+   - Ctrl/Cmd+click for multi-select
+   - Drag rectangle for area selection
+   - Selection highlight (border/handles)
+
+2. Movement:
+   - Click and drag to move
+   - Arrow keys for fine positioning
+   - Shift+arrow for larger steps
+   - Multi-select and move all together
+   - IMPORTANT: Update all connections while moving
+
+3. Editing:
+   - Double-click to edit text
+   - Properties panel for detailed editing
+   - Context menu (right-click) for actions
+
+4. Deletion:
+   - Select and press Delete/Backspace
+   - Also delete connected lines or ask for confirmation
+
+TOOLBAR TOOLS:
+--------------
+1. Select tool (default, arrow cursor)
+2. Hand tool (pan canvas)
+3. Shape tools (specific to current diagram type)
+4. Connection tools (different types)
+5. Text tool (add standalone text)
+6. Delete tool
+
+KEYBOARD SHORTCUTS:
+-------------------
+- Ctrl/Cmd+Z: Undo
+- Ctrl/Cmd+Y or Ctrl/Cmd+Shift+Z: Redo
+- Ctrl/Cmd+C: Copy
+- Ctrl/Cmd+V: Paste
+- Ctrl/Cmd+X: Cut
+- Ctrl/Cmd+A: Select all
+- Delete/Backspace: Delete selected
+- Ctrl/Cmd+D: Duplicate
+- Ctrl/Cmd+G: Group
+- Ctrl/Cmd+Shift+G: Ungroup
+- Ctrl/Cmd+S: Save
+- Ctrl/Cmd+E: Export
+
+===================================================================================
+DATA MODEL & PERSISTENCE:
+===================================================================================
+
+DIAGRAM MODEL:
+--------------
+```javascript
+{
+  id: 'diagram-uuid',
+  type: 'sequence', // or 'class', 'usecase', etc.
+  name: 'My Sequence Diagram',
+  version: '1.0',
+  created: '2025-12-17T10:00:00Z',
+  modified: '2025-12-17T11:30:00Z',
+  viewport: {
+    x: 0,
+    y: 0,
+    zoom: 1.0
+  },
+  shapes: [
+    {
+      id: 'shape-1',
+      type: 'actor', // or 'class', 'usecase', etc.
+      x: 100,
+      y: 100,
+      width: 80,
+      height: 120,
+      rotation: 0,
+      zIndex: 1,
+      properties: {
+        label: 'User',
+        stereotype: '',
+        attributes: [], // for class diagram
+        methods: [], // for class diagram
+        // ... type-specific properties
+      },
+      style: {
+        fill: '#ffffff',
+        stroke: '#000000',
+        strokeWidth: 2,
+        fontSize: 14,
+        fontFamily: 'Arial',
+        textAlign: 'center'
+      }
+    }
+  ],
+  connections: [
+    {
+      id: 'conn-1',
+      type: 'association', // or other connection types
+      source: {
+        shapeId: 'shape-1',
+        anchorPoint: 'right'
+      },
+      target: {
+        shapeId: 'shape-2',
+        anchorPoint: 'left'
+      },
+      waypoints: [], // for custom routing
+      properties: {
+        label: 'calls',
+        sourceMultiplicity: '1',
+        targetMultiplicity: '*',
+        stereotype: ''
+      },
+      style: {
+        stroke: '#000000',
+        strokeWidth: 2,
+        strokeDasharray: '', // '5,5' for dashed
+        startMarker: 'none',
+        endMarker: 'arrow-open'
+      }
+    }
+  ]
+}
+```
+
+SAVE/LOAD:
+----------
+- Export as JSON (entire diagram)
+- Export as SVG (for embedding)
+- Export as PNG/JPEG (rasterized)
+- Export as PDF (vector)
+- Auto-save to localStorage
+- Cloud save (optional integration)
+
+===================================================================================
+STYLING & UI/UX:
+===================================================================================
+
+VISUAL DESIGN:
+--------------
+- Clean, modern interface
+- White/light gray canvas background with optional grid
+- Blue selection highlights
+- Smooth animations (100-200ms) for hover effects
+- Consistent iconography
+- Responsive layout (toolbar, canvas, properties panel)
+
+COLOR SCHEME:
+-------------
+- Primary: Blue (#2196F3)
+- Accent: Light blue (#64B5F6)
+- Background: White (#FFFFFF)
+- Canvas: Light gray (#F5F5F5)
+- Text: Dark gray (#212121)
+- Secondary text: Medium gray (#757575)
+- Borders: Light gray (#E0E0E0)
+- Selection: Blue (#2196F3 with 50% opacity)
+
+SHAPE DEFAULTS:
+---------------
+- Fill: White
+- Stroke: Black (2px)
+- Font: 14px Arial
+- Rounded corners: 4px (where applicable)
+- Shadow: Optional subtle drop shadow
+
+RESPONSIVE BEHAVIOR:
+--------------------
+- Minimum window width: 1024px
+- Collapsible side panels
+- Mobile/tablet support with touch gestures
+- High DPI display support (SVG scales perfectly)
+
+===================================================================================
+ERROR HANDLING & VALIDATION:
+===================================================================================
+
+VALIDATION RULES:
+-----------------
+1. Connection validation:
+   - Only allow valid connections for diagram type
+   - Prevent connecting incompatible shapes
+   - Warn on duplicate connections
+   - Prevent self-connections (except state transitions)
+
+2. Shape constraints:
+   - Minimum size enforcement
+   - Boundary checks (can't move outside canvas)
+   - Overlap warnings (optional)
+
+3. Data validation:
+   - Required fields (e.g., class name)
+   - Unique IDs
+   - Valid property formats
+
+ERROR MESSAGES:
+---------------
+- User-friendly error notifications
+- Non-intrusive toasts or alerts
+- Contextual help/tooltips
+- Validation messages in properties panel
+
+===================================================================================
+PERFORMANCE OPTIMIZATION:
+===================================================================================
+
+RENDERING:
+----------
+- Use SVG for vector graphics (scales without quality loss)
+- Virtual canvas for large diagrams (render only visible area)
+- Debounce/throttle expensive operations (zoom, pan)
+- Use requestAnimationFrame for smooth animations
+- Lazy render connections (only when needed)
+
+MEMORY:
+-------
+- Clean up event listeners when destroying objects
+- Use object pooling for frequently created/destroyed objects
+- Limit undo/redo stack size (e.g., 50 operations)
+
+DATA:
+-----
+- Efficient data structures (Maps for quick lookups)
+- Minimize DOM manipulations (batch updates)
+- Use SVG groups for logical clustering
+
+===================================================================================
+TESTING & QUALITY ASSURANCE:
+===================================================================================
+
+TEST CASES:
+-----------
+1. Shape creation and deletion
+2. Shape resizing (all 8 handles, all shapes)
+3. Shape movement (single and multi-select)
+4. Connection creation between all valid shape combinations
+5. Connection updates when shapes move/resize
+6. Undo/redo for all operations
+7. Copy/paste functionality
+8. Save/load diagram integrity
+9. Export to all formats
+10. Zoom and pan behavior
+11. Multi-selection operations
+12. Keyboard shortcuts
+13. Properties panel updates
+14. Diagram type switching
+15. Edge cases (empty diagram, very large diagrams, etc.)
+
+BROWSER COMPATIBILITY:
+----------------------
+- Chrome/Edge (latest 2 versions)
+- Firefox (latest 2 versions)
+- Safari (latest 2 versions)
+- Mobile browsers (iOS Safari, Chrome Android)
+
+===================================================================================
+IMPLEMENTATION ROADMAP:
+===================================================================================
+
+PHASE 1 - FOUNDATION:
+---------------------
+1. Set up project structure and build system
+2. Implement SVGCanvas with pan and zoom
+3. Create EventBus for event handling
+4. Implement CommandManager for undo/redo
+5. Build basic ShapeFactory
+6. Create SelectionManager
+
+PHASE 2 - CORE FEATURES:
+------------------------
+1. Implement ResizeHandleManager (with proper connection updates)
+2. Build ConnectionManager (with all arrow types and routing)
+3. Create Toolbar with tool selection
+4. Implement PropertiesPanel
+5. Add DiagramSelector
+6. Build TextEditor for inline editing
+
+PHASE 3 - DIAGRAM PLUGINS:
+--------------------------
+1. Implement Class Diagram plugin (most complex, good starting point)
+2. Implement Sequence Diagram plugin
+3. Implement Use Case Diagram plugin
+4. Implement State Diagram plugin
+5. Implement Activity Diagram plugin
+6. Implement ERD plugin
+7. Implement Component Diagram plugin
+8. Implement Package Diagram plugin
+
+PHASE 4 - ADVANCED FEATURES:
+----------------------------
+1. Copy/paste/duplicate functionality
+2. Multi-selection and group operations
+3. Export functionality (JSON, SVG, PNG, PDF)
+4. Auto-layout algorithms
+5. Snap-to-grid and alignment guides
+6. Keyboard shortcuts
+7. Context menus
+
+PHASE 5 - POLISH:
+-----------------
+1. Styling and theming
+2. Animations and transitions
+3. Loading/saving improvements
+4. Performance optimization
+5. Error handling and validation
+6. Documentation and help system
+7. Testing and bug fixes
+
+===================================================================================
+CRITICAL SUCCESS FACTORS:
+===================================================================================
+
+1. CONNECTION INTEGRITY:
+   - Connections MUST update when shapes move or resize
+   - Use event listeners on shape changes
+   - Implement observer pattern for shape-connection relationships
+   - Test extensively with complex diagrams
+
+2. RESIZE FUNCTIONALITY:
+   - All 8 resize handles must work correctly
+   - Maintain minimum dimensions
+   - Update internal shape structure (e.g., class compartments)
+   - Real-time visual feedback
+
+3. DIAGRAM-SPECIFIC RULES:
+   - Each diagram type has unique constraints
+   - Implement validation for connections
+   - Provide appropriate shapes and tools per diagram type
+   - Follow UML standards strictly
+
+4. USER EXPERIENCE:
+   - Intuitive tool selection
+   - Clear visual feedback for all actions
+   - Smooth performance even with large diagrams
+   - Helpful error messages and validation
+
+5. CODE QUALITY:
+   - Clean, modular architecture
+   - Well-documented code
+   - Consistent naming conventions
+   - Proper separation of concerns
+   - Easy to extend with new diagram types
+
+===================================================================================
+EXAMPLE CODE STRUCTURE:
+===================================================================================
+
+FILE ORGANIZATION:
+------------------
+/src
+  /core
+    EventBus.js
+    CommandManager.js
+    PluginRegistry.js
+  /canvas
+    SVGCanvas.js
+    ResizeHandleManager.js
+    SelectionManager.js
+    InteractionController.js
+    TextEditor.js
+  /model
+    Diagram.js
+    Shape.js
+    Connection.js
+  /shapes
+    ShapeFactory.js
+    BaseShape.js
+    [DiagramSpecificShapes].js
+  /connections
+    ConnectionManager.js
+    ConnectionRouter.js
+    ArrowMarkers.js
+  /commands
+    Commands.js (AddShape, DeleteShape, MoveShape, etc.)
+  /plugins
+    /sequence
+      SequencePlugin.js
+    /class
+      ClassPlugin.js
+    [other diagram plugins]
+  /ui
+    Toolbar.js
+    PropertiesPanel.js
+    DiagramSelector.js
+  /utils
+    geometry.js
+    svg.js
+    export.js
+  main.js
+
+/styles
+  main.css
+  canvas.css
+  toolbar.css
+  properties.css
+  shapes.css
+
+/index.html
+
+===================================================================================
+ADDITIONAL NOTES:
+===================================================================================
+
+1. Use SVG for all graphics (not Canvas) for:
+   - Crisp rendering at any zoom level
+   - Easy DOM manipulation and event handling
+   - Accessibility (screen readers)
+   - Export capabilities
+
+2. Connection algorithm considerations:
+   - Calculate optimal anchor points based on shape positions
+   - Implement orthogonal routing for better readability
+   - Avoid overlapping connections when possible
+   - Support manual waypoint adjustment
+
+3. Accessibility:
+   - Keyboard navigation support
+   - ARIA labels for screen readers
+   - High contrast mode support
+   - Focus indicators
+
+4. Future enhancements:
+   - Collaboration features (multiple users)
+   - Code generation from diagrams
+   - Reverse engineering (generate diagrams from code)
+   - Template library
+   - AI-assisted diagram creation
+   - Version history
+   - Comments and annotations
+
+===================================================================================
+FINAL CHECKLIST:
+===================================================================================
+
+✓ All 8 diagram types implemented with correct shapes
+✓ All connection types with proper arrows and line styles
+✓ Resize handles working on all shapes (8 directions)
+✓ Connections update when shapes move or resize
+✓ Undo/redo for all operations
+✓ Save/load functionality with proper data model
+✓ Export to multiple formats (JSON, SVG, PNG, PDF)
+✓ Keyboard shortcuts implemented
+✓ Properties panel for editing element properties
+✓ Toolbar with all necessary tools
+✓ Pan and zoom on canvas
+✓ Multi-selection and bulk operations
+✓ Copy/paste/duplicate functionality
+✓ Validation and error handling
+✓ Clean, modular code architecture
+✓ Performance optimization for large diagrams
+✓ Cross-browser compatibility tested
+✓ Comprehensive testing completed
+✓ Documentation provided
+
+===================================================================================
+END OF PROMPT
+===================================================================================
+
+This prompt provides comprehensive specifications for building a fully functional
+UML diagram maker. Pay special attention to the connection system and resize
+functionality as these are the most critical and complex components that must
+work flawlessly for a good user experience.

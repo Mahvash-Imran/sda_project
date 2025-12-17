@@ -241,6 +241,7 @@ export class Connection {
         sourceHandle.setAttribute('stroke-width', '2');
         sourceHandle.style.display = 'none';
         sourceHandle.style.cursor = 'move';
+        sourceHandle.style.pointerEvents = 'all';
         this.element.appendChild(sourceHandle);
 
         // Target endpoint handle
@@ -254,6 +255,7 @@ export class Connection {
         targetHandle.setAttribute('stroke-width', '2');
         targetHandle.style.display = 'none';
         targetHandle.style.cursor = 'move';
+        targetHandle.style.pointerEvents = 'all';
         this.element.appendChild(targetHandle);
 
         // Render waypoint handles
@@ -269,6 +271,7 @@ export class Connection {
             wpHandle.setAttribute('data-waypoint-index', i);
             wpHandle.style.display = 'none';
             wpHandle.style.cursor = 'move';
+            wpHandle.style.pointerEvents = 'all';
             this.element.appendChild(wpHandle);
         }
 
@@ -287,6 +290,7 @@ export class Connection {
             addWaypointHandle.setAttribute('stroke-width', '1');
             addWaypointHandle.style.display = 'none';
             addWaypointHandle.style.cursor = 'crosshair';
+            addWaypointHandle.style.pointerEvents = 'all';
             this.element.appendChild(addWaypointHandle);
         }
     }
@@ -377,14 +381,57 @@ export class Connection {
                 targetHandle.setAttribute('cy', path[path.length - 1].y);
             }
 
-            // Update add-waypoint handle
+            // Update add-waypoint handle position (at midpoint of connection)
             const addWaypointHandle = this.element.querySelector('.connector__add-waypoint');
             if (addWaypointHandle) {
-                const midX = (path[0].x + path[path.length - 1].x) / 2;
-                const midY = (path[0].y + path[path.length - 1].y) / 2;
+                // Calculate midpoint along the path
+                const midIdx = Math.floor(path.length / 2);
+                let midX, midY;
+                if (path.length === 2) {
+                    midX = (path[0].x + path[1].x) / 2;
+                    midY = (path[0].y + path[1].y) / 2;
+                } else {
+                    midX = path[midIdx].x;
+                    midY = path[midIdx].y;
+                }
                 addWaypointHandle.setAttribute('cx', midX);
                 addWaypointHandle.setAttribute('cy', midY);
             }
+        }
+
+        // Update waypoint handles - remove old ones and re-add if count changed
+        const existingWaypoints = this.element.querySelectorAll('.connector__waypoint');
+        if (existingWaypoints.length !== this.waypoints.length) {
+            // Remove existing waypoint handles
+            existingWaypoints.forEach(wp => wp.remove());
+            
+            // Re-render waypoint handles
+            const isSelected = this.selected;
+            for (let i = 0; i < this.waypoints.length; i++) {
+                const wp = this.waypoints[i];
+                const wpHandle = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                wpHandle.setAttribute('class', 'connector__waypoint');
+                wpHandle.setAttribute('x', wp.x - 4);
+                wpHandle.setAttribute('y', wp.y - 4);
+                wpHandle.setAttribute('width', '8');
+                wpHandle.setAttribute('height', '8');
+                wpHandle.setAttribute('fill', '#0066FF');
+                wpHandle.setAttribute('data-waypoint-index', i);
+                wpHandle.style.display = isSelected ? 'block' : 'none';
+                wpHandle.style.cursor = 'move';
+                wpHandle.style.pointerEvents = 'all';
+                this.element.appendChild(wpHandle);
+            }
+        } else {
+            // Just update positions
+            existingWaypoints.forEach((wpHandle, i) => {
+                if (i < this.waypoints.length) {
+                    const wp = this.waypoints[i];
+                    wpHandle.setAttribute('x', wp.x - 4);
+                    wpHandle.setAttribute('y', wp.y - 4);
+                    wpHandle.setAttribute('data-waypoint-index', i);
+                }
+            });
         }
     }
 

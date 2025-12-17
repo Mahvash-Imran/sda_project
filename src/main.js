@@ -117,6 +117,15 @@ class UMLifyApp {
         this.eventBus.on(Events.CONNECTION_ADDED, ({ connection }) => {
             connection.render(this.canvas.getConnectionLayer());
         });
+
+        // Listen for shape updates (move, resize) to update connections
+        this.eventBus.on(Events.SHAPE_UPDATED, ({ shape }) => {
+            // Update all connections attached to this shape
+            const relatedConnections = this.diagram.getConnectionsForShape(shape.id);
+            relatedConnections.forEach(conn => {
+                conn.updateElement();
+            });
+        });
     }
 
     setupHeaderButtons() {

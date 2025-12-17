@@ -13,7 +13,8 @@ import {
     AddShapeCommand,
     RemoveShapeCommand,
     MoveShapesCommand,
-    AddConnectionCommand
+    AddConnectionCommand,
+    ResizeShapeCommand
 } from '../commands/Commands.js';
 
 export class InteractionController {
@@ -282,9 +283,34 @@ export class InteractionController {
     }
 
     /**
-     * End resizing
+     * End resizing - save the operation for undo/redo
      */
     endResize() {
+        if (this.resizingShape && this.resizeStartBounds) {
+            const newBounds = {
+                x: this.resizingShape.x,
+                y: this.resizingShape.y,
+                width: this.resizingShape.width,
+                height: this.resizingShape.height
+            };
+            
+            // Only create command if bounds actually changed
+            if (newBounds.x !== this.resizeStartBounds.x ||
+                newBounds.y !== this.resizeStartBounds.y ||
+                newBounds.width !== this.resizeStartBounds.width ||
+                newBounds.height !== this.resizeStartBounds.height) {
+                
+                const command = new ResizeShapeCommand(
+                    this.resizingShape,
+                    { ...this.resizeStartBounds },
+                    { ...newBounds }
+                );
+                // Don't execute since we already applied the changes visually
+                // Just add to history for undo
+                this.commandManager.addToHistory(command);
+            }
+        }
+        
         this.isResizing = false;
         this.state = 'idle';
         this.resizeHandle = null;

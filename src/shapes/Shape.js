@@ -66,6 +66,7 @@ export class Shape {
         this.x = x;
         this.y = y;
         this.updateElement();
+        this.eventBus.emit(Events.SHAPE_UPDATED, { shape: this, property: 'position' });
     }
 
     /**
@@ -77,6 +78,7 @@ export class Shape {
         this.width = Math.max(width, this.minWidth);
         this.height = Math.max(height, this.minHeight);
         this.updateElement();
+        this.eventBus.emit(Events.SHAPE_UPDATED, { shape: this, property: 'size' });
     }
 
     /**
@@ -88,6 +90,7 @@ export class Shape {
         this.x += dx;
         this.y += dy;
         this.updateElement();
+        // Note: Don't emit here to avoid too many events during drag
     }
 
     /**

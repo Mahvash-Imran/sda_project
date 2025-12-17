@@ -124,7 +124,7 @@
     stroke-width: 1.5px;
     opacity: 0;
     cursor: crosshair;
-    transition: opacity var(--transition-fast);
+    transition: opacity var(--transition-fast), transform 0.15s ease;
 }
 
 .shape:hover .connection-point,
@@ -135,12 +135,23 @@
 
 .connection-point:hover {
     fill: var(--color-accent);
-    transform: scale(1.2);
+    transform: scale(1.3);
 }
 
 .connection-point--active {
     fill: var(--color-accent);
     opacity: 1;
+}
+
+/* Shape connecting state (potential connection target) */
+.shape--connecting {
+    outline: 2px dashed var(--color-accent);
+    outline-offset: 4px;
+}
+
+.shape--connecting .shape__body {
+    stroke: var(--color-accent);
+    stroke-width: 2.5px;
 }
 
 /* ============================================
@@ -397,12 +408,28 @@
     cursor: pointer;
 }
 
-.connector:hover {
+.connector:hover .connector__line {
     stroke: var(--shape-stroke-hover);
+    stroke-width: 2px;
 }
 
-.connector--selected {
-    stroke: var(--shape-stroke-selected);
+.connector--selected .connector__line {
+    stroke: var(--color-accent);
+    stroke-width: 2px;
+}
+
+/* Connector endpoint handles */
+.connector__endpoint {
+    fill: #ffffff;
+    stroke: var(--color-accent);
+    stroke-width: 2px;
+    cursor: move;
+    transition: transform 0.1s ease;
+}
+
+.connector__endpoint:hover {
+    transform: scale(1.2);
+    fill: var(--color-accent);
 }
 
 /* Dashed line (async, dependency, etc) */
